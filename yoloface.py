@@ -18,10 +18,13 @@
 #                                    --output-dir outputs/
 #                 python yoloface.py --src 1 --output-dir outputs/
 
+# python3 yoloface.py --image ~/repos/python/src/github.ibm.com/krisztian-benda/smart-caption-localization/test_images/news.png --output-image outputs/proba.tiff 
 
 import argparse
 import sys
 import os
+import numpy as np
+from PIL import Image as pil_image
 
 from utils import *
 
@@ -40,6 +43,7 @@ parser.add_argument('--src', type=int, default=0,
                     help='source of the camera')
 parser.add_argument('--output-dir', type=str, default='outputs/',
                     help='path to the output directory')
+parser.add_argument('--output-image', type=str, help='path to the output file')
 args = parser.parse_args()
 
 #####################################################################
@@ -64,10 +68,25 @@ net = cv2.dnn.readNetFromDarknet(args.model_cfg, args.model_weights)
 net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
 net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
 
+def make_enabling_map(faces, image, output):
+    print(image.shape)
+    enabling_map = np.zeros(image.shape[:2])
+    for face in faces:
+        boosting_ratio = 0.2
+        boost_width = int(face[3] * boosting_ratio)
+        boost_height = int(face[2] * boosting_ratio)
+        face_map = np.ones((face[3]+boost_width, face[2]+boost_height))
+        boosted_x = face[1]-int(boost_width/2) if face[1]-int(boost_width/2) >= 0 else 0
+        boosted_y = face[0]-int(boost_height/2) if face[0]-int(boost_height/2) >= 0 else 0
+        upright = boosted_x + face_map.shape[0] if boosted_x + face_map.shape[0] <= image.shape[0] else image.shape[0]
+        downright = boosted_y + face_map.shape[1] if boosted_y + face_map.shape[1] <= image.shape[1] else image.shape[0]
+        enabling_map[boosted_x:upright, boosted_y:downright] = face_map
+    enabling_map_image = pil_image.fromarray(enabling_map)
+    enabling_map_image.save(output)
 
 def _main():
-    wind_name = 'face detection using YOLOv3'
-    cv2.namedWindow(wind_name, cv2.WINDOW_NORMAL)
+    # wind_name = 'face detection using YOLOv3'
+    # cv2.namedWindow(wind_name, cv2.WINDOW_NORMAL)
 
     output_file = ''
 
@@ -103,7 +122,7 @@ def _main():
         if not has_frame:
             print('[i] ==> Done processing!!!')
             print('[i] ==> Output file is stored at', os.path.join(args.output_dir, output_file))
-            cv2.waitKey(1000)
+            # cv2.waitKey(1000)
             break
 
         # Create a 4D blob from a frame.
@@ -119,6 +138,8 @@ def _main():
         # Remove the bounding boxes with low confidence
         faces = post_process(frame, outs, CONF_THRESHOLD, NMS_THRESHOLD)
         print('[i] ==> # detected faces: {}'.format(len(faces)))
+        print(faces)
+        make_enabling_map(faces, frame, args.output_image)
         print('#' * 60)
 
         # initialize the set of information we'll displaying on the frame
@@ -137,15 +158,15 @@ def _main():
         else:
             video_writer.write(frame.astype(np.uint8))
 
-        cv2.imshow(wind_name, frame)
+        # cv2.imshow(wind_name, frame)
 
-        key = cv2.waitKey(1)
-        if key == 27 or key == ord('q'):
-            print('[i] ==> Interrupted by user!')
-            break
+        # key = cv2.waitKey(1)
+        # if key == 27 or key == ord('q'):
+        #     print('[i] ==> Interrupted by user!')
+        #     break
 
     cap.release()
-    cv2.destroyAllWindows()
+    # cv2.destroyAllWindows()
 
     print('==> All done!')
     print('***********************************************************')
