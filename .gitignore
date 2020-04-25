@@ -50,3 +50,6 @@ outputs/
 
 # Datasets
 data/
+
+# Python byte code
+*.pyc
